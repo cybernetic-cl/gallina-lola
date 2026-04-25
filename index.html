@@ -631,7 +631,7 @@ function update(){
 
         if(p.type === "corn"){
           cornStreak++;
-          floatingTexts.push({x:p.x,y:p.y-18,text:"Racha x"+cornStreak+" 🔥🔥🔥",life:65});
+          floatingTexts.push({x:p.x,y:p.y-18,text:"Racha x"+cornStreak+" 🔥",life:65});
 
           if(cornStreak >= 10 && !dragonActive){
             dragonActive = true;
@@ -1355,14 +1355,28 @@ function drawHUD(){
   ctx.fillText("🐔 "+safeName(),24,48);
   ctx.fillText("Nivel "+level,150,48);
   ctx.fillText("Pts: "+score,260,48);
-  ctx.fillText("❤ "+lives,380,48);
+
+  // Contador de vidas grande y visible en tiempo real
+  ctx.fillStyle="rgba(255,245,245,.98)";
+  ctx.fillRect(350,30,100,34);
+  ctx.strokeStyle="#b91c1c";
+  ctx.lineWidth=3;
+  ctx.strokeRect(350,30,100,34);
+  ctx.fillStyle="#b91c1c";
+  ctx.font="bold 19px monospace";
+  ctx.fillText("❤ "+lives+"/5",362,53);
+
+  // Descuento visual de vidas perdidas
+  ctx.fillStyle="#222";
+  ctx.font="bold 11px monospace";
+  ctx.fillText("Perdidas: "+livesLost,356,78);
 
   ctx.font="bold 13px monospace";
-  ctx.fillText("⭐=5 ❤️=3 🌽=1 🍓=vida 🥚=oro 🌌=5s 🪽=flotar 🐉=10🌽",24,76);
+  ctx.fillText("⭐=5 ❤️=3 🌽=1 🍓=vida 🥚=oro 🌌=5s 🪽=flotar 🐉=10🌽",24,84);
 
   ctx.font="12px monospace";
-  ctx.fillText("Evita enemigos. 🪽 Enter/Saltar = flotar.",24,100);
-  ctx.fillText("Monedas acumuladas: "+coins+" 🪙",24,124);
+  ctx.fillText("Evita enemigos. 🪽 Enter/Saltar = flotar.",24,104);
+  ctx.fillText("Monedas acumuladas: "+coins+" 🪙",24,126);
 
   ctx.fillStyle="#ddd";
   ctx.fillRect(210,112,230,16);
@@ -1400,7 +1414,7 @@ function drawHUD(){
   }else if(!goldenActive && !galaxyActive && !wingActive){
     ctx.fillStyle="#7c2d12";
     ctx.font="bold 13px monospace";
-    ctx.fillText("Racha x"+cornStreak+" 🔥🔥🔥 · 10 elotes = Modo Dragón 🐉",24,144);
+    ctx.fillText("Racha x"+cornStreak+" 🔥 · 10 elotes = Modo Dragón 🐉",24,144);
   }
 
   ctx.fillStyle="rgba(255,255,255,.65)";
