@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
-<title>Gallinita Lola PRO</title>
+<title>Gallinita Lola PRO - Fuego Manual</title>
 <style>
   *{box-sizing:border-box}
   html,body{
@@ -41,6 +41,22 @@
     border:4px solid #d45b94;
     font-size:17px;
   }
+  #fireBtn{
+    right:128px;
+    bottom:calc(30px + env(safe-area-inset-bottom));
+    width:118px;
+    height:58px;
+    border-radius:22px;
+    background:linear-gradient(180deg,#ffef7a,#ff5a1f);
+    border:4px solid #7a1200;
+    color:#2b0600;
+    font-size:16px;
+    text-shadow:0 1px 0 rgba(255,255,255,.45);
+  }
+  #fireBtn:active{
+    transform:scale(.94);
+    box-shadow:0 3px 8px rgba(0,0,0,.3);
+  }
   #muteBtn{
     left:16px;
     bottom:calc(22px + env(safe-area-inset-bottom));
@@ -56,6 +72,7 @@
 <body>
 <canvas id="game" width="480" height="800"></canvas>
 <button id="muteBtn" class="gameBtn">🔊 Música</button>
+<button id="fireBtn" class="gameBtn">🔥 FUEGO</button>
 <button id="jumpBtn" class="gameBtn">SALTAR</button>
 
 <script>
@@ -326,6 +343,26 @@ function jump(){
   }
 }
 
+
+function shootFire(){
+  // Botón manual: dispara un solo fuego lineal hacia adelante.
+  // Para el modo prueba del dragón, se permite disparar durante la partida.
+  if(state !== "play") return;
+  if(fireBalls.length > 0) return;
+
+  fireBalls.push({
+    x:lola.x + 118,   // separado de la boca
+    y:lola.y + 30,
+    w:64,
+    h:18,
+    vx:11.5,         // movimiento lineal hacia adelante
+    life:90
+  });
+
+  floatingTexts.push({x:lola.x+60,y:lola.y-8,text:"🔥 Fuego",life:42});
+  beep(760,.045);
+}
+
 function spawnThings(){
   const cfg = levelData[level-1];
 
@@ -484,18 +521,8 @@ function update(){
   prizes = prizes.filter(p=>p.x>-100 && !p.taken);
   enemies = enemies.filter(e=>e.x>-100);
 
-  // Modo Dragón: dispara fuego automáticamente y destruye enemigos/obstáculos.
-  if(dragonActive && frame % 10 === 0){
-    fireBalls.push({
-      x:lola.x + 112,
-      y:lola.y + 27,
-      w:42,
-      h:18,
-      vx:8.8,
-      life:80
-    });
-  }
-
+  // Fuego manual: solo avanza cuando el jugador presiona el botón 🔥 FUEGO.
+  // No se genera automáticamente.
   fireBalls.forEach(f=>{
     f.x += f.vx;
     f.life--;
@@ -1088,9 +1115,10 @@ function drawDragonLola(x,y,scale=3){
     line(8,19,3,5,dark); line(8,24,6,1,outline); line(13,19,3,5,dark); line(11,24,6,1,outline);
   }
 
-  // Fuego separado de la boca
-  if(frame % 10 < 8){
-    line(39,7,4,3,"#ff2400"); line(43,6,8,5,"#ff3b00"); line(51,7,8,3,"#ff9900"); line(59,8,5,1,"#fff36d"); line(45,8,8,1,"#fff36d");
+  // brillo en la boca; el fuego real es un único proyectil que avanza separado
+  if(dragonActive && fireBalls.length > 0){
+    line(38,7,2,3,"#ff2400");
+    line(40,8,2,1,"#fff36d");
   }
   ctx.restore();
 }
@@ -1264,20 +1292,42 @@ function drawWorld(){
     }
   });
 
-  // fuego del modo dragón
+  // fuego manual: proyectil lineal separado de la boca
   fireBalls.forEach(f=>{
     ctx.save();
-    ctx.globalAlpha=.96;
+    const pulse = Math.sin(frame/4)*1.5;
+    ctx.globalAlpha=.98;
+
+    ctx.fillStyle="rgba(80,0,0,.22)";
+    ctx.beginPath();
+    ctx.ellipse(f.x+32, f.y+16, 42, 7, 0, 0, Math.PI*2);
+    ctx.fill();
+
     ctx.fillStyle="#ff2400";
     ctx.beginPath();
-    ctx.ellipse(f.x+18,f.y+7,22,10,0,0,Math.PI*2);
+    ctx.moveTo(f.x, f.y+9);
+    ctx.lineTo(f.x+18, f.y+1-pulse);
+    ctx.lineTo(f.x+64, f.y+0);
+    ctx.lineTo(f.x+78, f.y+9);
+    ctx.lineTo(f.x+64, f.y+18);
+    ctx.lineTo(f.x+18, f.y+17+pulse);
+    ctx.closePath();
     ctx.fill();
-    ctx.fillStyle="#ffb000";
+
+    ctx.fillStyle="#ff8a00";
     ctx.beginPath();
-    ctx.ellipse(f.x+31,f.y+7,24,7,0,0,Math.PI*2);
+    ctx.moveTo(f.x+12, f.y+9);
+    ctx.lineTo(f.x+30, f.y+4);
+    ctx.lineTo(f.x+72, f.y+9);
+    ctx.lineTo(f.x+30, f.y+14);
+    ctx.closePath();
     ctx.fill();
+
     ctx.fillStyle="#fff36d";
-    ctx.fillRect(f.x+32,f.y+5,20,4);
+    ctx.beginPath();
+    ctx.ellipse(f.x+50, f.y+9, 22, 4, 0, 0, Math.PI*2);
+    ctx.fill();
+
     ctx.restore();
   });
 
@@ -1386,7 +1436,7 @@ function drawHUD(){
   if(dragonActive){
     ctx.fillStyle="#c2410c";
     ctx.font="bold 13px monospace";
-    ctx.fillText("🐉 Modo Dragón: "+Math.ceil(dragonTimer/60)+"s · lanzando fuego 🔥",24,144);
+    ctx.fillText("🐉 Modo Dragón: "+Math.ceil(dragonTimer/60)+"s · botón 🔥 FUEGO",24,144);
   }else if(!goldenActive && !galaxyActive && !wingActive){
     ctx.fillStyle="#7c2d12";
     ctx.font="bold 13px monospace";
@@ -1565,11 +1615,20 @@ window.addEventListener("keydown",e=>{
     }
   }
 
+  if(e.key==="f" || e.key==="F"){
+    e.preventDefault();
+    shootFire();
+    return;
+  }
+
   if(e.code==="Space" || e.key==="ArrowUp" || e.key==="Enter"){
     e.preventDefault();
     jump();
   }
 });
+
+document.getElementById("fireBtn").addEventListener("click",e=>{e.preventDefault();shootFire();});
+document.getElementById("fireBtn").addEventListener("touchstart",e=>{e.preventDefault();shootFire();},{passive:false});
 
 document.getElementById("jumpBtn").addEventListener("click",e=>{e.preventDefault();jump();});
 document.getElementById("jumpBtn").addEventListener("touchstart",e=>{e.preventDefault();jump();},{passive:false});
