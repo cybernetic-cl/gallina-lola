@@ -487,8 +487,8 @@ function update(){
   // Modo Dragón: dispara fuego automáticamente y destruye enemigos/obstáculos.
   if(dragonActive && frame % 10 === 0){
     fireBalls.push({
-      x:lola.x + 63,
-      y:lola.y + 31,
+      x:lola.x + 112,
+      y:lola.y + 27,
       w:42,
       h:18,
       vx:8.8,
@@ -1025,126 +1025,92 @@ function drawDragonLola(x,y,scale=3){
 
   const line=(x,y,w,h,c)=>{ctx.fillStyle=c;ctx.fillRect(x,y,w,h);};
   const px=(x,y,c)=>{ctx.fillStyle=c;ctx.fillRect(x,y,1,1);};
+  const outline="#420404", red="#c1121f", red2="#ff3030", red3="#ff5a1f", dark="#740000", darker="#3b0303", orange="#ff3b00", yellow="#ffd166", belly="#ffba08";
+  const flap = lola && lola.jumping ? Math.floor(frame/5)%2 : 0;
+  const breathe = Math.sin(frame/6);
 
-  // 🔥 AURA DE FUEGO ANIMADA alrededor del dragón
+  // Aura de fuego alrededor del dragón
   ctx.save();
-  const cx = 17, cy = 12;
-  for(let i=0;i<5;i++){
-    ctx.globalAlpha = Math.max(0.07, 0.30 - i*0.045);
-    ctx.fillStyle = i%3===0 ? "#ff2400" : (i%3===1 ? "#ff9900" : "#fff36d");
+  for(let i=0;i<7;i++){
+    ctx.globalAlpha = Math.max(0.05, 0.25 - i*0.028);
+    ctx.fillStyle = i%3===0 ? "#ff2400" : (i%3===1 ? "#ff9f00" : "#ffe066");
     ctx.beginPath();
-    ctx.ellipse(
-      cx + Math.sin(frame/7+i)*2,
-      cy + Math.cos(frame/8+i)*2,
-      24 + i*4 + Math.sin(frame/5+i)*3,
-      18 + i*3 + Math.cos(frame/6+i)*2,
-      0,
-      0,
-      Math.PI*2
-    );
+    ctx.ellipse(15+Math.sin(frame/7+i)*2,14+Math.cos(frame/8+i)*2,25+i*3+breathe*2,23+i*2+Math.cos(frame/7+i)*2,0,0,Math.PI*2);
     ctx.fill();
   }
-
-  // Llamas tipo corona
-  for(let i=0;i<9;i++){
-    const fx = -4 + i*5;
-    const fy = 24 + Math.sin(frame/4+i)*2;
-    ctx.globalAlpha = .70;
-    ctx.fillStyle = i%2===0 ? "#ff3b00" : "#ffb000";
-    ctx.beginPath();
-    ctx.moveTo(fx, fy);
-    ctx.lineTo(fx+3, fy-8-Math.sin(frame/5+i)*4);
-    ctx.lineTo(fx+6, fy);
-    ctx.closePath();
-    ctx.fill();
+  for(let i=0;i<8;i++){
+    const fx=-6+i*5, fy=27+Math.sin(frame/4+i)*2;
+    ctx.globalAlpha=.65;
+    ctx.fillStyle=i%2===0?"#ff3b00":"#ffb000";
+    ctx.beginPath();ctx.moveTo(fx,fy);ctx.lineTo(fx+3,fy-9-Math.sin(frame/5+i)*4);ctx.lineTo(fx+6,fy);ctx.closePath();ctx.fill();
   }
   ctx.restore();
 
-  const outline="#4a0404";
-  const red="#c1121f";
-  const red2="#ef233c";
-  const dark="#780000";
-  const orange="#ff3b00";
-  const yellow="#ffd166";
-  const wing="#9d0208";
-
-  // cola
-  line(-3,12,5,3,outline);
-  line(-6,11,3,2,dark);
-  line(1,11,5,4,dark);
-  line(-8,10,2,2,orange);
-
-  // ala trasera
-  line(4,2,10,2,outline);
-  line(5,4,11,3,outline);
-  line(6,1,7,2,wing);
-  line(7,4,8,2,orange);
-  line(4,7,5,2,dark);
-
-  // cuerpo rojo
-  line(3,8,16,1,outline);
-  line(2,9,19,7,outline);
-  line(4,10,15,6,red);
-  line(6,8,10,3,red2);
-  line(5,14,13,2,dark);
-
-  // pancita
-  line(8,12,8,2,"#ffba08");
-  line(10,14,6,1,"#faa307");
-
-  // cabeza
-  line(17,4,9,1,outline);
-  line(16,5,11,7,outline);
-  line(18,6,8,5,red);
-  line(19,4,5,3,red2);
-
-  // hocico hacia la derecha
-  line(26,7,5,1,outline);
-  line(26,8,7,3,outline);
-  line(26,8,5,2,red);
-  line(31,9,2,1,dark);
-
-  // ojo
-  line(23,7,1,1,"#fff36d");
-  px(23,7,"#000");
-
-  // cuernos
-  line(18,1,2,3,yellow);
-  line(23,1,2,3,yellow);
-  line(18,0,2,1,"#fff3bf");
-  line(23,0,2,1,"#fff3bf");
-
-  // cresta
-  line(10,5,2,2,yellow);
-  line(14,4,2,2,yellow);
-  line(18,3,2,2,yellow);
-
-  // patas animadas
-  const step = Math.floor(frame/8)%2;
-  if(step===0){
-    line(6,16,3,4,dark); line(5,20,5,1,outline);
-    line(15,16,3,4,dark); line(16,20,5,1,outline);
+  // Alas animadas: al saltar baten
+  if(flap===0){
+    line(3,1,14,2,outline); line(2,3,16,3,outline); line(4,5,14,3,outline);
+    line(6,0,8,2,dark); line(5,3,11,2,red); line(7,5,10,2,red2);
+    line(3,6,4,2,darker); line(11,7,4,2,darker);
   }else{
-    line(7,16,3,4,dark); line(8,20,5,1,outline);
-    line(14,16,3,4,dark); line(13,20,5,1,outline);
+    line(2,11,15,2,outline); line(0,13,17,3,outline); line(2,16,13,3,outline);
+    line(4,12,11,2,dark); line(2,14,12,2,red); line(4,16,9,2,red2); line(1,18,4,2,darker);
   }
 
-  // 🔥 fuego en la boca
+  // Cola levantada
+  line(-5,18,5,3,outline); line(-8,16,4,3,outline); line(-10,14,3,2,outline); line(-12,12,2,2,orange);
+  line(-4,17,5,2,dark); line(-7,15,4,2,red); line(-9,13,2,1,red3);
+
+  // Cuerpo más erguido
+  line(3,10,15,1,outline); line(2,11,18,9,outline); line(5,8,11,4,outline);
+  line(4,11,14,8,red); line(6,9,9,4,red2); line(5,17,13,2,dark);
+  line(10,12,6,7,belly); line(11,12,4,1,"#fff1a8"); line(11,15,5,1,"#faa307"); line(11,18,4,1,"#faa307");
+
+  // Cuello y cabeza levantados
+  line(15,5,5,1,outline); line(14,6,7,7,outline); line(16,6,4,7,red); line(17,5,3,3,red2); line(18,11,3,3,dark);
+  line(20,3,8,1,outline); line(19,4,11,6,outline); line(21,5,8,4,red); line(22,4,5,2,red2);
+
+  // Hocico definido
+  line(29,6,5,1,outline); line(29,7,7,3,outline); line(30,7,5,2,red); line(35,8,2,1,darker); line(31,10,4,1,outline);
+  line(25,6,2,2,"#fff36d"); px(26,6,"#000");
+
+  // Cuernos y cresta
+  line(20,0,2,3,yellow); line(27,0,2,3,yellow); line(20,0,2,1,"#fff3bf"); line(27,0,2,1,"#fff3bf");
+  line(12,6,2,2,yellow); line(15,4,2,2,yellow); line(18,2,2,2,yellow);
+
+  // Brazos y patas
+  line(18,13,2,5,darker); line(19,17,4,1,outline); line(20,18,1,1,yellow);
+  const step=Math.floor(frame/8)%2;
+  if(lola && lola.jumping){
+    line(7,19,3,4,dark); line(5,23,5,1,outline); line(14,19,3,4,dark); line(15,23,5,1,outline);
+  }else if(step===0){
+    line(6,19,3,5,dark); line(4,24,6,1,outline); line(15,19,3,5,dark); line(16,24,6,1,outline);
+  }else{
+    line(8,19,3,5,dark); line(8,24,6,1,outline); line(13,19,3,5,dark); line(11,24,6,1,outline);
+  }
+
+  // Fuego separado de la boca
   if(frame % 10 < 8){
-    line(33,8,7,3,"#ff2400");
-    line(40,9,7,2,"#ff9900");
-    line(47,9,5,1,"#fff36d");
+    line(39,7,4,3,"#ff2400"); line(43,6,8,5,"#ff3b00"); line(51,7,8,3,"#ff9900"); line(59,8,5,1,"#fff36d"); line(45,8,8,1,"#fff36d");
   }
-
   ctx.restore();
 }
-
 function drawWorld(){
   const cfg = levelData[level-1] || levelData[0];
 
-  // cielo
-  ctx.fillStyle=cfg.bg;
+  // cielo con profundidad
+  const skyGrad = ctx.createLinearGradient(0,0,0,groundY);
+  skyGrad.addColorStop(0,cfg.bg);
+  skyGrad.addColorStop(1, level >= 8 ? "#21114d" : "#dff7ff");
+  ctx.fillStyle=skyGrad;
   ctx.fillRect(0,0,W,H);
+
+  ctx.save();
+  ctx.globalAlpha=.18;
+  ctx.fillStyle="#fff7cc";
+  ctx.beginPath();
+  ctx.arc(W-80,95,55,0,Math.PI*2);
+  ctx.fill();
+  ctx.restore();
 
   // estrellas para niveles nocturnos / galaxia
   if(level >= 8){
@@ -1179,6 +1145,14 @@ function drawWorld(){
   ctx.fillRect(0,groundY,W,H-groundY);
   ctx.fillStyle="#d9b879";
   ctx.fillRect(0,groundY+52,W,88);
+  ctx.save();
+  ctx.globalAlpha=.22;
+  ctx.fillStyle="#8b5a2b";
+  for(let gx=0; gx<W; gx+=22){
+    const gy=groundY+60+((gx*7+frame)%42);
+    ctx.fillRect(gx,gy,10,4);
+  }
+  ctx.restore();
   ctx.fillStyle="#3f8f3c";
   ctx.fillRect(0,groundY,W,8);
 
@@ -1293,13 +1267,17 @@ function drawWorld(){
   // fuego del modo dragón
   fireBalls.forEach(f=>{
     ctx.save();
-    ctx.globalAlpha=.95;
+    ctx.globalAlpha=.96;
     ctx.fillStyle="#ff2400";
-    ctx.fillRect(f.x,f.y,32,14);
+    ctx.beginPath();
+    ctx.ellipse(f.x+18,f.y+7,22,10,0,0,Math.PI*2);
+    ctx.fill();
     ctx.fillStyle="#ffb000";
-    ctx.fillRect(f.x+10,f.y+3,30,8);
+    ctx.beginPath();
+    ctx.ellipse(f.x+31,f.y+7,24,7,0,0,Math.PI*2);
+    ctx.fill();
     ctx.fillStyle="#fff36d";
-    ctx.fillRect(f.x+25,f.y+5,14,4);
+    ctx.fillRect(f.x+32,f.y+5,20,4);
     ctx.restore();
   });
 
@@ -1325,10 +1303,8 @@ function drawWorld(){
 
     if(!lola.inv || lola.inv%12<6){
       const floatY = wingActive ? lola.y + Math.sin(frame/6)*5 : lola.y;
-      if(dragonActive) drawDragonLola(lola.x-8,floatY+3,3);
-      else if(galaxyActive) drawGalaxyAura(lola.x,floatY,lola.walk);
-      else if(goldenActive) drawGoldenAura(lola.x,floatY,lola.walk);
-      else drawPixelChicken(lola.x,floatY,4,lola.walk,wingActive);
+      // MODO TEST TEMPORAL: Lola siempre se muestra como dragón para mejorar su diseño.
+      drawDragonLola(lola.x-8,floatY+3,3);
     }
   }
 
