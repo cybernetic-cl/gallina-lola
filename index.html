@@ -86,6 +86,10 @@ let goldenActive = false;
 let goldenTimer = 0;
 let galaxyActive = false;
 let galaxyTimer = 0;
+let dragonActive = false;
+let dragonTimer = 0;
+let cornStreak = 0;
+let fireBalls = [];
 let galaxyEggSpawned = false;
 let wingActive = false;
 let wingTimer = 0;
@@ -252,6 +256,10 @@ function startLevel(n){
   goldenTimer = 0;
   galaxyActive = false;
   galaxyTimer = 0;
+  dragonActive = false;
+  dragonTimer = 0;
+  cornStreak = 0;
+  fireBalls = [];
   galaxyEggSpawned = false;
   wingActive = false;
   wingTimer = 0;
@@ -393,9 +401,11 @@ function spawnThings(){
 }
 
 function hitLife(){
-  if(lola.inv>0 || goldenActive || galaxyActive) return;
+  if(lola.inv>0 || goldenActive || galaxyActive || dragonActive) return;
   lives--;
   livesLost++;
+  cornStreak = 0; // La racha SOLO se pierde cuando Lola recibe daño.
+  floatingTexts.push({x:lola.x+20,y:lola.y-34,text:"Racha perdida 💥",life:75});
   floatingTexts.push({x:lola.x+20,y:lola.y-10,text:"-1 vida",life:70});
   lola.inv = 95;
   message = "¡Cuidado Lola!";
@@ -474,6 +484,53 @@ function update(){
   prizes = prizes.filter(p=>p.x>-100 && !p.taken);
   enemies = enemies.filter(e=>e.x>-100);
 
+  // Modo Dragón: dispara fuego automáticamente y destruye enemigos/obstáculos.
+  if(dragonActive && frame % 10 === 0){
+    fireBalls.push({
+      x:lola.x + 63,
+      y:lola.y + 31,
+      w:42,
+      h:18,
+      vx:8.8,
+      life:80
+    });
+  }
+
+  fireBalls.forEach(f=>{
+    f.x += f.vx;
+    f.life--;
+  });
+
+  for(const f of fireBalls){
+    for(const e of enemies){
+      if(e.x > -100 && rects(f,e)){
+        score += 3;
+        coins += 1;
+        localStorage.setItem("lola_pro_coins", coins);
+        floatingTexts.push({x:e.x,y:e.y,text:"+3 fuego",life:60});
+        e.x = -140;
+        f.life = 0;
+        beep(520,.04);
+      }
+    }
+
+    for(const o of obstacles){
+      if(o.x > -100 && rects(f,o)){
+        score += 2;
+        coins += 1;
+        localStorage.setItem("lola_pro_coins", coins);
+        floatingTexts.push({x:o.x,y:o.y,text:"+2 fuego",life:60});
+        o.x = -140;
+        f.life = 0;
+        beep(420,.04);
+      }
+    }
+  }
+
+  fireBalls = fireBalls.filter(f=>f.life>0 && f.x<W+90);
+  obstacles = obstacles.filter(o=>o.x>-100);
+  enemies = enemies.filter(e=>e.x>-100);
+
   const lolaHit = {x:lola.x+12,y:lola.y+12,w:lola.w-24,h:lola.h-14};
 
   for(const o of obstacles){
@@ -486,11 +543,11 @@ function update(){
 
   for(const e of enemies){
     if(rects(lolaHit,e)){
-      if(goldenActive || galaxyActive){
-        score += galaxyActive ? 4 : 2;
+      if(goldenActive || galaxyActive || dragonActive){
+        score += dragonActive ? 5 : (galaxyActive ? 4 : 2);
         coins += 2;
         localStorage.setItem("lola_pro_coins", coins);
-        floatingTexts.push({x:e.x,y:e.y,text: galaxyActive ? "+4 pts" : "+2 pts",life:60});
+        floatingTexts.push({x:e.x,y:e.y,text: dragonActive ? "+5 fuego" : (galaxyActive ? "+4 pts" : "+2 pts"),life:60});
         e.x = -120;
         beep(720,.05);
       }else{
@@ -528,6 +585,9 @@ function update(){
       }else if(p.type==="gold"){
         goldenActive = true;
         galaxyActive = false;
+        dragonActive = false;
+        dragonTimer = 0;
+        fireBalls = [];
         goldenTimer = 180;
         galaxyTimer = 0;
         floatingTexts.push({x:p.x,y:p.y,text:"¡Súper poder!",life:80});
@@ -539,6 +599,9 @@ function update(){
         galaxyActive = true;
         goldenActive = false;
         wingActive = false;
+        dragonActive = false;
+        dragonTimer = 0;
+        fireBalls = [];
         galaxyTimer = 300; // 5 segundos aprox
         goldenTimer = 0;
         wingTimer = 0;
@@ -551,6 +614,9 @@ function update(){
         wingActive = true;
         goldenActive = false;
         galaxyActive = false;
+        dragonActive = false;
+        dragonTimer = 0;
+        fireBalls = [];
         wingTimer = 300; // 5 segundos aprox
         goldenTimer = 0;
         galaxyTimer = 0;
@@ -562,6 +628,31 @@ function update(){
       }else{
         score += gained;
         coins += gained;
+
+        if(p.type === "corn"){
+          cornStreak++;
+          floatingTexts.push({x:p.x,y:p.y-18,text:"Racha x"+cornStreak+" 🔥🔥🔥",life:65});
+
+          if(cornStreak >= 10 && !dragonActive){
+            dragonActive = true;
+            dragonTimer = 300; // 5 segundos aprox
+            cornStreak = 0;
+            goldenActive = false;
+            galaxyActive = false;
+            wingActive = false;
+            goldenTimer = 0;
+            galaxyTimer = 0;
+            wingTimer = 0;
+            fireBalls = [];
+            message = "🐉 ¡Modo Dragón activado! Fuego total 🔥";
+            messageTimer = 120;
+            stopAllMusic();
+            playHeroMusic();
+          }
+        }else{
+          // La racha de elotes NO se pierde por tomar otros premios.
+        }
+
         localStorage.setItem("lola_pro_coins", coins);
         floatingTexts.push({x:p.x,y:p.y,text:"+"+gained+" pts",life:60});
       }
@@ -585,6 +676,16 @@ function update(){
     galaxyTimer--;
     if(galaxyTimer<=0){
       galaxyActive=false;
+      stopAllMusic();
+      playBgMusic();
+    }
+  }
+
+  if(dragonActive){
+    dragonTimer--;
+    if(dragonTimer<=0){
+      dragonActive=false;
+      fireBalls = [];
       stopAllMusic();
       playBgMusic();
     }
@@ -916,6 +1017,128 @@ function drawGalaxyAura(x,y,walk){
   ctx.restore();
 }
 
+
+function drawDragonLola(x,y,scale=3){
+  ctx.save();
+  ctx.translate(Math.round(x), Math.round(y));
+  ctx.scale(scale, scale);
+
+  const line=(x,y,w,h,c)=>{ctx.fillStyle=c;ctx.fillRect(x,y,w,h);};
+  const px=(x,y,c)=>{ctx.fillStyle=c;ctx.fillRect(x,y,1,1);};
+
+  // 🔥 AURA DE FUEGO ANIMADA alrededor del dragón
+  ctx.save();
+  const cx = 17, cy = 12;
+  for(let i=0;i<5;i++){
+    ctx.globalAlpha = Math.max(0.07, 0.30 - i*0.045);
+    ctx.fillStyle = i%3===0 ? "#ff2400" : (i%3===1 ? "#ff9900" : "#fff36d");
+    ctx.beginPath();
+    ctx.ellipse(
+      cx + Math.sin(frame/7+i)*2,
+      cy + Math.cos(frame/8+i)*2,
+      24 + i*4 + Math.sin(frame/5+i)*3,
+      18 + i*3 + Math.cos(frame/6+i)*2,
+      0,
+      0,
+      Math.PI*2
+    );
+    ctx.fill();
+  }
+
+  // Llamas tipo corona
+  for(let i=0;i<9;i++){
+    const fx = -4 + i*5;
+    const fy = 24 + Math.sin(frame/4+i)*2;
+    ctx.globalAlpha = .70;
+    ctx.fillStyle = i%2===0 ? "#ff3b00" : "#ffb000";
+    ctx.beginPath();
+    ctx.moveTo(fx, fy);
+    ctx.lineTo(fx+3, fy-8-Math.sin(frame/5+i)*4);
+    ctx.lineTo(fx+6, fy);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+
+  const outline="#4a0404";
+  const red="#c1121f";
+  const red2="#ef233c";
+  const dark="#780000";
+  const orange="#ff3b00";
+  const yellow="#ffd166";
+  const wing="#9d0208";
+
+  // cola
+  line(-3,12,5,3,outline);
+  line(-6,11,3,2,dark);
+  line(1,11,5,4,dark);
+  line(-8,10,2,2,orange);
+
+  // ala trasera
+  line(4,2,10,2,outline);
+  line(5,4,11,3,outline);
+  line(6,1,7,2,wing);
+  line(7,4,8,2,orange);
+  line(4,7,5,2,dark);
+
+  // cuerpo rojo
+  line(3,8,16,1,outline);
+  line(2,9,19,7,outline);
+  line(4,10,15,6,red);
+  line(6,8,10,3,red2);
+  line(5,14,13,2,dark);
+
+  // pancita
+  line(8,12,8,2,"#ffba08");
+  line(10,14,6,1,"#faa307");
+
+  // cabeza
+  line(17,4,9,1,outline);
+  line(16,5,11,7,outline);
+  line(18,6,8,5,red);
+  line(19,4,5,3,red2);
+
+  // hocico hacia la derecha
+  line(26,7,5,1,outline);
+  line(26,8,7,3,outline);
+  line(26,8,5,2,red);
+  line(31,9,2,1,dark);
+
+  // ojo
+  line(23,7,1,1,"#fff36d");
+  px(23,7,"#000");
+
+  // cuernos
+  line(18,1,2,3,yellow);
+  line(23,1,2,3,yellow);
+  line(18,0,2,1,"#fff3bf");
+  line(23,0,2,1,"#fff3bf");
+
+  // cresta
+  line(10,5,2,2,yellow);
+  line(14,4,2,2,yellow);
+  line(18,3,2,2,yellow);
+
+  // patas animadas
+  const step = Math.floor(frame/8)%2;
+  if(step===0){
+    line(6,16,3,4,dark); line(5,20,5,1,outline);
+    line(15,16,3,4,dark); line(16,20,5,1,outline);
+  }else{
+    line(7,16,3,4,dark); line(8,20,5,1,outline);
+    line(14,16,3,4,dark); line(13,20,5,1,outline);
+  }
+
+  // 🔥 fuego en la boca
+  if(frame % 10 < 8){
+    line(33,8,7,3,"#ff2400");
+    line(40,9,7,2,"#ff9900");
+    line(47,9,5,1,"#fff36d");
+  }
+
+  ctx.restore();
+}
+
 function drawWorld(){
   const cfg = levelData[level-1] || levelData[0];
 
@@ -1067,6 +1290,19 @@ function drawWorld(){
     }
   });
 
+  // fuego del modo dragón
+  fireBalls.forEach(f=>{
+    ctx.save();
+    ctx.globalAlpha=.95;
+    ctx.fillStyle="#ff2400";
+    ctx.fillRect(f.x,f.y,32,14);
+    ctx.fillStyle="#ffb000";
+    ctx.fillRect(f.x+10,f.y+3,30,8);
+    ctx.fillStyle="#fff36d";
+    ctx.fillRect(f.x+25,f.y+5,14,4);
+    ctx.restore();
+  });
+
   // textos flotantes
   floatingTexts.forEach(t=>{
     ctx.save();
@@ -1089,7 +1325,8 @@ function drawWorld(){
 
     if(!lola.inv || lola.inv%12<6){
       const floatY = wingActive ? lola.y + Math.sin(frame/6)*5 : lola.y;
-      if(galaxyActive) drawGalaxyAura(lola.x,floatY,lola.walk);
+      if(dragonActive) drawDragonLola(lola.x-8,floatY+3,3);
+      else if(galaxyActive) drawGalaxyAura(lola.x,floatY,lola.walk);
       else if(goldenActive) drawGoldenAura(lola.x,floatY,lola.walk);
       else drawPixelChicken(lola.x,floatY,4,lola.walk,wingActive);
     }
@@ -1121,7 +1358,7 @@ function drawHUD(){
   ctx.fillText("❤ "+lives,380,48);
 
   ctx.font="bold 13px monospace";
-  ctx.fillText("⭐=5 ❤️=3 🌽=1 🍓=vida 🥚=oro 🌌=5s 🪽=flotar",24,76);
+  ctx.fillText("⭐=5 ❤️=3 🌽=1 🍓=vida 🥚=oro 🌌=5s 🪽=flotar 🐉=10🌽",24,76);
 
   ctx.font="12px monospace";
   ctx.fillText("Evita enemigos. 🪽 Enter/Saltar = flotar.",24,100);
@@ -1154,6 +1391,16 @@ function drawHUD(){
     ctx.fillStyle="#2563eb";
     ctx.font="bold 13px monospace";
     ctx.fillText("🪽 Ala mágica: "+Math.ceil(wingTimer/60)+"s",24,144);
+  }
+
+  if(dragonActive){
+    ctx.fillStyle="#c2410c";
+    ctx.font="bold 13px monospace";
+    ctx.fillText("🐉 Modo Dragón: "+Math.ceil(dragonTimer/60)+"s · lanzando fuego 🔥",24,144);
+  }else if(!goldenActive && !galaxyActive && !wingActive){
+    ctx.fillStyle="#7c2d12";
+    ctx.font="bold 13px monospace";
+    ctx.fillText("Racha x"+cornStreak+" 🔥🔥🔥 · 10 elotes = Modo Dragón 🐉",24,144);
   }
 
   ctx.fillStyle="rgba(255,255,255,.65)";
@@ -1343,7 +1590,7 @@ document.getElementById("muteBtn").addEventListener("click",()=>{
   if(musicMuted) stopAllMusic();
   else if(state==="play"){
     if(wingActive) playWingMusic();
-    else if(goldenActive || galaxyActive) playHeroMusic();
+    else if(goldenActive || galaxyActive || dragonActive) playHeroMusic();
     else playBgMusic();
   }
 });
