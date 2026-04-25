@@ -123,6 +123,8 @@ let fireBalls = [];
 let explosions = [];
 let fireCooldown = 0;
 const fireCooldownMax = 55;
+let dragonFireLevel = 1; // 1=normal, 2=huevo oro, 3=huevo galaxia
+let dragonFireBoostTimer = 0;
 let screenShake = 0;
 let galaxyEggSpawned = false;
 let wingActive = false;
@@ -305,6 +307,8 @@ function startLevel(n){
   fireBalls = [];
   explosions = [];
   fireCooldown = 0;
+  dragonFireLevel = 1;
+  dragonFireBoostTimer = 0;
   screenShake = 0;
   galaxyEggSpawned = false;
   wingActive = false;
@@ -424,17 +428,23 @@ function shootFire(){
   screenShake = 8;
   vibrate(35);
 
-  fireBalls.push({
-    x:lola.x + 118,
-    y:lola.y + 30,
-    w:64,
-    h:18,
-    vx:12.5,
-    life:95,
-    radius:76
+  const fireCount = dragonActive ? dragonFireLevel : 1;
+  const offsets = fireCount === 3 ? [-24, 0, 24] : (fireCount === 2 ? [-14, 14] : [0]);
+
+  offsets.forEach((dy, i)=>{
+    fireBalls.push({
+      x:lola.x + 118 + i*8,
+      y:lola.y + 30 + dy,
+      w:64,
+      h:18,
+      vx:12.5,
+      life:95,
+      radius: fireCount === 3 ? 90 : (fireCount === 2 ? 82 : 76),
+      power: fireCount
+    });
   });
 
-  floatingTexts.push({x:lola.x+60,y:lola.y-8,text:"🔥 Fuego",life:42});
+  floatingTexts.push({x:lola.x+60,y:lola.y-8,text: fireCount===3 ? "🔥🔥🔥 Triple fuego" : (fireCount===2 ? "🔥🔥 Doble fuego" : "🔥 Fuego"),life:48});
   beep(760,.045);
 }
 
@@ -742,33 +752,57 @@ function update(){
         message = lives >= 5 ? "🍓 "+safeName()+": vidas llenas, +2 puntos" : "🍓 ¡Vida extra para "+safeName()+"!";
         messageTimer = 80;
       }else if(p.type==="gold"){
-        goldenActive = true;
-        galaxyActive = false;
-        dragonActive = false;
-        dragonTimer = 0;
-        fireBalls = [];
-        goldenTimer = 180;
-        galaxyTimer = 0;
-        floatingTexts.push({x:p.x,y:p.y,text:"¡Súper poder!",life:80});
-        message = "✨ ¡"+safeName()+", gallina dorada invencible!";
-        messageTimer = 100;
-        stopAllMusic();
-        playHeroMusic();
+        if(dragonActive){
+          dragonFireLevel = Math.max(dragonFireLevel, 2);
+          dragonFireBoostTimer = 300;
+          floatingTexts.push({x:p.x,y:p.y,text:"🔥🔥 Doble fuego",life:90});
+          message = "🥚 ¡Dragón con doble fuego por 5 segundos!";
+          messageTimer = 110;
+          vibrate([45,25,45]);
+          playHeroMusic();
+        }else{
+          goldenActive = true;
+          galaxyActive = false;
+          dragonActive = false;
+          dragonTimer = 0;
+          fireBalls = [];
+          dragonFireLevel = 1;
+          dragonFireBoostTimer = 0;
+          goldenTimer = 180;
+          galaxyTimer = 0;
+          floatingTexts.push({x:p.x,y:p.y,text:"¡Súper poder!",life:80});
+          message = "✨ ¡"+safeName()+", gallina dorada invencible!";
+          messageTimer = 100;
+          stopAllMusic();
+          playHeroMusic();
+        }
       }else if(p.type==="galaxy"){
-        galaxyActive = true;
-        goldenActive = false;
-        wingActive = false;
-        dragonActive = false;
-        dragonTimer = 0;
-        fireBalls = [];
-        galaxyTimer = 300; // 5 segundos aprox
-        goldenTimer = 0;
-        wingTimer = 0;
-        floatingTexts.push({x:p.x,y:p.y,text:"¡Poder galaxia!",life:90});
-        message = "🌌 ¡"+safeName()+", Lola Galaxia por 5 segundos!";
-        messageTimer = 120;
-        stopAllMusic();
-        playHeroMusic();
+        if(dragonActive){
+          dragonFireLevel = 3;
+          dragonFireBoostTimer = 300;
+          floatingTexts.push({x:p.x,y:p.y,text:"🔥🔥🔥 Triple fuego",life:95});
+          message = "🌌 ¡Dragón con triple fuego por 5 segundos!";
+          messageTimer = 120;
+          vibrate([55,25,55,25,75]);
+          playHeroMusic();
+        }else{
+          galaxyActive = true;
+          goldenActive = false;
+          wingActive = false;
+          dragonActive = false;
+          dragonTimer = 0;
+          fireBalls = [];
+          dragonFireLevel = 1;
+          dragonFireBoostTimer = 0;
+          galaxyTimer = 300; // 5 segundos aprox
+          goldenTimer = 0;
+          wingTimer = 0;
+          floatingTexts.push({x:p.x,y:p.y,text:"¡Poder galaxia!",life:90});
+          message = "🌌 ¡"+safeName()+", Lola Galaxia por 5 segundos!";
+          messageTimer = 120;
+          stopAllMusic();
+          playHeroMusic();
+        }
       }else if(p.type==="wing"){
         wingActive = true;
         goldenActive = false;
@@ -776,6 +810,8 @@ function update(){
         dragonActive = false;
         dragonTimer = 0;
         fireBalls = [];
+        dragonFireLevel = 1;
+        dragonFireBoostTimer = 0;
         wingTimer = 300; // 5 segundos aprox
         goldenTimer = 0;
         galaxyTimer = 0;
@@ -803,6 +839,8 @@ function update(){
             galaxyTimer = 0;
             wingTimer = 0;
             fireBalls = [];
+            dragonFireLevel = 1;
+            dragonFireBoostTimer = 0;
             message = "🐉 ¡Modo Dragón activado! Fuego total 🔥";
             messageTimer = 120;
             stopAllMusic();
@@ -841,11 +879,21 @@ function update(){
     }
   }
 
+  if(dragonActive && dragonFireBoostTimer > 0){
+    dragonFireBoostTimer--;
+    if(dragonFireBoostTimer <= 0){
+      dragonFireLevel = 1;
+      floatingTexts.push({x:lola.x+20,y:lola.y-18,text:"🔥 Fuego normal",life:55});
+    }
+  }
+
   if(dragonActive){
     dragonTimer--;
     if(dragonTimer<=0){
       dragonActive=false;
       fireBalls = [];
+      dragonFireLevel = 1;
+      dragonFireBoostTimer = 0;
       stopAllMusic();
       playBgMusic();
     }
@@ -1604,7 +1652,9 @@ function drawHUD(){
   let statusFg = "#9a3412";
 
   if(dragonActive){
-    statusText = "🐉 Dragón "+Math.ceil(dragonTimer/60)+"s  ·  "+(fireCooldown>0 ? "🔥 recarga "+Math.ceil(fireCooldown/60)+"s" : "🔥 fuego listo");
+    const fireLabel = dragonFireLevel===3 ? "🔥🔥🔥 triple" : (dragonFireLevel===2 ? "🔥🔥 doble" : "🔥 normal");
+    const boostLabel = dragonFireBoostTimer>0 ? " · "+Math.ceil(dragonFireBoostTimer/60)+"s" : "";
+    statusText = "🐉 Dragón "+Math.ceil(dragonTimer/60)+"s · "+fireLabel+boostLabel+" · "+(fireCooldown>0 ? "recarga "+Math.ceil(fireCooldown/60)+"s" : "listo");
     statusBg = "#ffedd5";
     statusFg = "#c2410c";
   }else if(galaxyActive){
