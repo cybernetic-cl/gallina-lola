@@ -61,8 +61,8 @@
     transform:scale(.94);
     box-shadow:0 3px 8px rgba(0,0,0,.3);
   }
+  #pauseBtn,
   #muteBtn{
-    right:12px;
     top:calc(10px + env(safe-area-inset-top));
     width:38px;
     height:38px;
@@ -73,6 +73,9 @@
     display:flex;
     padding:0;
   }
+  #pauseBtn{ right:58px; }
+  #muteBtn{ right:12px; }
+  #pauseBtn:active,
   #muteBtn:active{
     transform:scale(.94);
   }
@@ -81,6 +84,7 @@
 <body>
 <canvas id="game" width="480" height="800"></canvas>
 <button id="fireBtn" class="gameBtn">🔥<br>FUEGO</button>
+<button id="pauseBtn" class="gameBtn" aria-label="Pausar">⏸</button>
 <button id="muteBtn" class="gameBtn" aria-label="Música">🔊</button>
 <button id="jumpBtn" class="gameBtn">SALTAR</button>
 
@@ -125,6 +129,10 @@ let wingActive = false;
 let wingTimer = 0;
 let wingSpawnedThisLevel = 0;
 let musicMuted = false;
+let paused = false;
+let jumpHeld = false;
+let jumpHoldFrames = 0;
+const jumpHoldMax = 18;
 let musicTimer = null;
 let currentMusicMode = null;
 let musicStep = 0;
@@ -309,7 +317,8 @@ function startLevel(n){
   hills = [];
   flowers = [];
   floatingTexts = [];
-  resetLola();
+  updatePauseButton();
+resetLola();
 
   for(let i=0;i<7;i++) clouds.push({x:rand(0,W),y:rand(75,230),s:rand(.7,1.3),dx:rand(.18,.4)});
   for(let i=0;i<5;i++) hills.push({x:i*145,y:groundY-80-rand(0,55),w:220,h:100});
@@ -318,6 +327,8 @@ function startLevel(n){
   message = safeName()+" · Nivel "+level+": "+cfg.name;
   messageTimer = 140;
   state = "play";
+  paused = false;
+  updatePauseButton();
   playBgMusic();
 }
 function resetGame(){
@@ -338,12 +349,36 @@ function resetGame(){
   startLevel(1);
 }
 
-function jump(){
+function updatePauseButton(){
+  const pauseBtn = document.getElementById("pauseBtn");
+  if(!pauseBtn) return;
+  pauseBtn.textContent = paused ? "▶" : "⏸";
+}
+
+function togglePause(){
+  if(state !== "play") return;
+  paused = !paused;
+  jumpHeld = false;
+  updatePauseButton();
+  vibrate(paused ? 18 : 10);
+  if(paused){
+    stopAllMusic();
+  }else{
+    if(musicMuted) return;
+    if(wingActive) playWingMusic();
+    else if(goldenActive || galaxyActive || dragonActive) playHeroMusic();
+    else playBgMusic();
+  }
+}
+
+function startJump(){
   if(state==="menu"){ resetGame(); return; }
   if(state==="gameover" || state==="win"){ resetGame(); return; }
+  if(paused) return;
+
+  jumpHeld = true;
 
   // Poder de ala: cada pulsación da un impulso suave hacia arriba.
-  // No sube infinito: queda limitado por wingTopLimit y vuelve a caer si no se pulsa otra vez.
   if(wingActive){
     if(lola.y > wingTopLimit + 6){
       lola.vy = Math.max(lola.vy + wingImpulse, -8.2);
@@ -359,17 +394,30 @@ function jump(){
   }
 
   if(!lola.jumping){
-    lola.vy = -18.5;
+    // Salto variable: parte bajo y sube más mientras mantienes presionado.
+    lola.vy = -12.2;
     lola.jumping = true;
+    jumpHoldFrames = 0;
     beep(660,.05);
     vibrate(18);
   }
 }
 
+function endJump(){
+  jumpHeld = false;
+  jumpHoldFrames = jumpHoldMax;
+  // Si suelta rápido, corta un poco la subida para salto pequeño.
+  if(state === "play" && !paused && !wingActive && lola.vy < -5.2){
+    lola.vy = -5.2;
+  }
+}
+
+function jump(){ startJump(); }
+
 
 function shootFire(){
   // Botón manual PRO: cooldown anti-spam + vibración visual.
-  if(state !== "play" || !dragonActive) return;
+  if(state !== "play" || paused || !dragonActive) return;
   if(fireCooldown > 0) return;
 
   fireCooldown = fireCooldownMax;
@@ -504,6 +552,9 @@ function createConfetti(){
 }
 
 function update(){
+  if(state === "play" && paused){
+    return;
+  }
   frame++;
   const fireBtn = document.getElementById("fireBtn");
   if(fireBtn){
@@ -528,6 +579,11 @@ function update(){
   lola.walk += speed*2.2;
   lola.y += lola.vy;
 
+  if(!wingActive && jumpHeld && lola.jumping && jumpHoldFrames < jumpHoldMax && lola.vy < 0){
+    lola.vy -= 0.38;
+    jumpHoldFrames++;
+  }
+
   if(wingActive){
     // Flotación controlada: cae lento, sube solo con Enter/Saltar y no cruza el límite superior.
     lola.vy += gravity * 0.42;
@@ -544,6 +600,7 @@ function update(){
     lola.y = groundY-lola.h;
     lola.vy = 0;
     lola.jumping = false;
+    jumpHoldFrames = 0;
   }
 
   obstacles.forEach(o=>o.x-=speed);
@@ -1683,6 +1740,20 @@ function drawEnd(title,subtitle){
   ctx.textAlign="left";
 }
 
+function drawPauseOverlay(){
+  ctx.save();
+  ctx.fillStyle="rgba(0,0,0,.45)";
+  ctx.fillRect(0,0,W,H);
+  ctx.fillStyle="#fff";
+  ctx.textAlign="center";
+  ctx.font="bold 34px monospace";
+  ctx.fillText("PAUSA", W/2, H/2-20);
+  ctx.font="bold 15px monospace";
+  ctx.fillText("Toca ▶ para continuar", W/2, H/2+20);
+  ctx.textAlign="left";
+  ctx.restore();
+}
+
 function draw(){
   ctx.clearRect(0,0,W,H);
 
@@ -1695,7 +1766,10 @@ function draw(){
   }
 
   drawWorld();
-  if(state==="play") drawHUD();
+  if(state==="play"){
+    drawHUD();
+    if(paused) drawPauseOverlay();
+  }
   if(state==="gameover") drawEnd("GAME OVER","Puntos: "+score);
   if(state==="win") drawEnd("¡GANASTE!","¡"+safeName()+" lo logró con Lola!");
 
@@ -1761,21 +1835,34 @@ window.addEventListener("keydown",e=>{
 
   if(e.code==="Space" || e.key==="ArrowUp" || e.key==="Enter"){
     e.preventDefault();
-    jump();
+    if(!e.repeat) startJump();
+  }
+});
+
+window.addEventListener("keyup",e=>{
+  if(e.code==="Space" || e.key==="ArrowUp" || e.key==="Enter"){
+    e.preventDefault();
+    endJump();
   }
 });
 
 document.getElementById("fireBtn").addEventListener("click",e=>{e.preventDefault();shootFire();});
 document.getElementById("fireBtn").addEventListener("touchstart",e=>{e.preventDefault();shootFire();},{passive:false});
 
-document.getElementById("jumpBtn").addEventListener("click",e=>{e.preventDefault();jump();});
-document.getElementById("jumpBtn").addEventListener("touchstart",e=>{e.preventDefault();jump();},{passive:false});
+document.getElementById("jumpBtn").addEventListener("mousedown",e=>{e.preventDefault();startJump();});
+document.getElementById("jumpBtn").addEventListener("mouseup",e=>{e.preventDefault();endJump();});
+document.getElementById("jumpBtn").addEventListener("mouseleave",e=>{endJump();});
+document.getElementById("jumpBtn").addEventListener("touchstart",e=>{e.preventDefault();startJump();},{passive:false});
+document.getElementById("jumpBtn").addEventListener("touchend",e=>{e.preventDefault();endJump();},{passive:false});
+document.getElementById("jumpBtn").addEventListener("touchcancel",e=>{e.preventDefault();endJump();},{passive:false});
+
+document.getElementById("pauseBtn").addEventListener("click",()=>{ togglePause(); });
 
 document.getElementById("muteBtn").addEventListener("click",()=>{
   musicMuted = !musicMuted;
   document.getElementById("muteBtn").textContent = musicMuted ? "🔇" : "🔊";
   if(musicMuted) stopAllMusic();
-  else if(state==="play"){
+  else if(state==="play" && !paused){
     if(wingActive) playWingMusic();
     else if(goldenActive || galaxyActive || dragonActive) playHeroMusic();
     else playBgMusic();
