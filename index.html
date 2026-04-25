@@ -134,16 +134,16 @@ let floatingTexts = [];
 let lola, obstacles, prizes, enemies, clouds, hills, flowers;
 
 const levelData = [
-  {name:"Pradera Dulce", bg:"#91e7ff", grass:"#75cf5b", hill:"#57b85c", speed:2.05, targetScore:25, obstacleRate:185, prizeRate:72},
-  {name:"Granja de Maíz", bg:"#a7ecff", grass:"#7fd25c", hill:"#69bd4d", speed:2.25, targetScore:55, obstacleRate:172, prizeRate:68},
-  {name:"Bosque Estrella", bg:"#9bd6ff", grass:"#61c76a", hill:"#3fa56a", speed:2.45, targetScore:90, obstacleRate:160, prizeRate:64},
-  {name:"Río Brillante", bg:"#87dfff", grass:"#6fd98d", hill:"#52b6d8", speed:2.65, targetScore:130, obstacleRate:148, prizeRate:61},
-  {name:"Montaña Algodón", bg:"#bfe9ff", grass:"#82d96b", hill:"#9bb7ff", speed:2.85, targetScore:175, obstacleRate:136, prizeRate:58},
-  {name:"Valle de Frutillas", bg:"#ffd6e8", grass:"#79d98f", hill:"#ff8db8", speed:3.05, targetScore:225, obstacleRate:126, prizeRate:55},
-  {name:"Desierto de Maicitos", bg:"#ffe6a7", grass:"#d6bf58", hill:"#d99f45", speed:3.25, targetScore:280, obstacleRate:116, prizeRate:52},
-  {name:"Noche de Luciérnagas", bg:"#3949ab", grass:"#4caf50", hill:"#283593", speed:3.45, targetScore:340, obstacleRate:106, prizeRate:49},
-  {name:"Cielo Arcoíris", bg:"#c6f6ff", grass:"#8ce99a", hill:"#d0bfff", speed:3.65, targetScore:405, obstacleRate:98, prizeRate:46},
-  {name:"Galaxia de Lola", bg:"#17113f", grass:"#5c7cfa", hill:"#7c3aed", speed:3.85, targetScore:480, obstacleRate:90, prizeRate:43}
+  {name:"Pradera Dulce", bg:"#91e7ff", grass:"#75cf5b", hill:"#57b85c", speed:2.05, targetScore:65, obstacleRate:185, prizeRate:72},
+  {name:"Granja de Maíz", bg:"#a7ecff", grass:"#7fd25c", hill:"#69bd4d", speed:2.25, targetScore:145, obstacleRate:172, prizeRate:68},
+  {name:"Bosque Estrella", bg:"#9bd6ff", grass:"#61c76a", hill:"#3fa56a", speed:2.45, targetScore:240, obstacleRate:160, prizeRate:64},
+  {name:"Río Brillante", bg:"#87dfff", grass:"#6fd98d", hill:"#52b6d8", speed:2.65, targetScore:350, obstacleRate:148, prizeRate:61},
+  {name:"Montaña Algodón", bg:"#bfe9ff", grass:"#82d96b", hill:"#9bb7ff", speed:2.85, targetScore:475, obstacleRate:136, prizeRate:58},
+  {name:"Valle de Frutillas", bg:"#ffd6e8", grass:"#79d98f", hill:"#ff8db8", speed:3.05, targetScore:615, obstacleRate:126, prizeRate:55},
+  {name:"Desierto de Maicitos", bg:"#ffe6a7", grass:"#d6bf58", hill:"#d99f45", speed:3.25, targetScore:770, obstacleRate:116, prizeRate:52},
+  {name:"Noche de Luciérnagas", bg:"#3949ab", grass:"#4caf50", hill:"#283593", speed:3.45, targetScore:945, obstacleRate:106, prizeRate:49},
+  {name:"Cielo Arcoíris", bg:"#c6f6ff", grass:"#8ce99a", hill:"#d0bfff", speed:3.65, targetScore:1140, obstacleRate:98, prizeRate:46},
+  {name:"Galaxia de Lola", bg:"#17113f", grass:"#5c7cfa", hill:"#7c3aed", speed:3.85, targetScore:1360, obstacleRate:90, prizeRate:43}
 ];
 
 const motivationalPhrases = [
@@ -187,6 +187,11 @@ const wingTheme = {
 };
 
 function rand(min,max){return Math.random()*(max-min)+min;}
+function vibrate(pattern){
+  if(navigator.vibrate){
+    try{ navigator.vibrate(pattern); }catch(e){}
+  }
+}
 function rects(a,b){return a.x<b.x+b.w && a.x+a.w>b.x && a.y<b.y+b.h && a.y+a.h>b.y;}
 function safeName(){
   const n = (playerName || "").trim();
@@ -344,6 +349,7 @@ function jump(){
       lola.vy = Math.max(lola.vy + wingImpulse, -8.2);
       lola.jumping = true;
       beep(780,.04);
+      vibrate(12);
     }else{
       lola.y = wingTopLimit;
       lola.vy = Math.max(lola.vy, 1.2);
@@ -356,6 +362,7 @@ function jump(){
     lola.vy = -18.5;
     lola.jumping = true;
     beep(660,.05);
+    vibrate(18);
   }
 }
 
@@ -367,6 +374,7 @@ function shootFire(){
 
   fireCooldown = fireCooldownMax;
   screenShake = 8;
+  vibrate(35);
 
   fireBalls.push({
     x:lola.x + 118,
@@ -467,6 +475,7 @@ function hitLife(){
   message = "¡Cuidado Lola!";
   messageTimer = 70;
   beep(130,.08);
+  vibrate([80,40,80]);
   if(lives<=0){
     state = "gameover";
     stopAllMusic();
@@ -475,6 +484,7 @@ function hitLife(){
 
 function levelUp(){
   createConfetti();
+  vibrate([60,30,60]);
   if(level < levelData.length){
     const next = level + 1;
     startLevel(next);
@@ -586,6 +596,7 @@ function update(){
     if(hit){
       f.life = 0;
       screenShake = 12;
+      vibrate([45,25,65]);
       explosions.push({x:hx,y:hy,r:12,grow:5,life:18,maxLife:18});
       beep(240,.055);
 
@@ -739,6 +750,7 @@ function update(){
             messageTimer = 120;
             stopAllMusic();
             playHeroMusic();
+            vibrate([90,40,90,40,140]);
           }
         }else{
           // La racha de elotes NO se pierde por tomar otros premios.
