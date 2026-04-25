@@ -67,6 +67,8 @@ const W = canvas.width;
 const H = canvas.height;
 const groundY = 610;
 const gravity = 0.50;
+const wingTopLimit = 150; // límite superior para que Lola no pase del marco/HUD
+const wingImpulse = -6.2; // impulso suave al presionar Enter/Saltar con ala
 
 let state = "menu";
 let level = 1;
@@ -85,6 +87,9 @@ let goldenTimer = 0;
 let galaxyActive = false;
 let galaxyTimer = 0;
 let galaxyEggSpawned = false;
+let wingActive = false;
+let wingTimer = 0;
+let wingSpawnedThisLevel = 0;
 let musicMuted = false;
 let musicTimer = null;
 let currentMusicMode = null;
@@ -108,16 +113,16 @@ const levelData = [
 ];
 
 const motivationalPhrases = [
-  "¡Lo estás haciendo súper!",
-  "¡Tú puedes!",
-  "¡Vamos, sigue así!",
-  "¡Eres un campeón!",
-  "¡Lola está feliz contigo!",
-  "¡Qué increíble salto!",
-  "¡Sigue juntando premios!",
-  "¡Cada nivel juegas mejor!",
-  "¡Tú y Lola son imparables!",
-  "¡Llegaste muy lejos!"
+  "¡Lo estás haciendo súper, {name}!",
+  "¡Tú puedes, {name}!",
+  "¡Vamos {name}, sigue así!",
+  "¡Eres un campeón, {name}!",
+  "¡Lola está feliz contigo, {name}!",
+  "¡Qué increíble salto, {name}!",
+  "¡Sigue juntando premios, {name}!",
+  "¡Cada nivel juegas mejor, {name}!",
+  "¡{name} y Lola son imparables!",
+  "¡Llegaste muy lejos, {name}!"
 ];
 
 const levelMusic = [
@@ -140,6 +145,13 @@ const heroTheme = {
   beat:[1,1,1,0,1,1,0,1]
 };
 
+const wingTheme = {
+  tempo:115,
+  melody:[659,784,988,1174,988,784,659,587,698,880,1046,880,784,698,659,587],
+  bass:[165,196,247,294,247,196,165,147],
+  beat:[1,0,0,1,0,1,0,1]
+};
+
 function rand(min,max){return Math.random()*(max-min)+min;}
 function rects(a,b){return a.x<b.x+b.w && a.x+a.w>b.x && a.y<b.y+b.h && a.y+a.h>b.y;}
 function safeName(){
@@ -149,6 +161,9 @@ function safeName(){
 function savePlayerName(){
   playerName = playerName.trim().slice(0,12);
   localStorage.setItem("lola_player_name", playerName);
+}
+function namedText(text){
+  return text.replaceAll("{name}", safeName());
 }
 function askPlayerName(){
   const typed = prompt("Escribe tu nombre para jugar:", playerName || "");
@@ -217,6 +232,10 @@ function playHeroMusic(){
   if(musicMuted) return;
   startSequencer(heroTheme, "hero");
 }
+function playWingMusic(){
+  if(musicMuted) return;
+  startSequencer(wingTheme, "wing");
+}
 function beep(freq=440,dur=.06){
   if(musicMuted) return;
   playTone(freq,dur,"square",0.035);
@@ -234,6 +253,9 @@ function startLevel(n){
   galaxyActive = false;
   galaxyTimer = 0;
   galaxyEggSpawned = false;
+  wingActive = false;
+  wingTimer = 0;
+  wingSpawnedThisLevel = 0;
   obstacles = [];
   prizes = [];
   enemies = [];
@@ -273,6 +295,22 @@ function resetGame(){
 function jump(){
   if(state==="menu"){ resetGame(); return; }
   if(state==="gameover" || state==="win"){ resetGame(); return; }
+
+  // Poder de ala: cada pulsación da un impulso suave hacia arriba.
+  // No sube infinito: queda limitado por wingTopLimit y vuelve a caer si no se pulsa otra vez.
+  if(wingActive){
+    if(lola.y > wingTopLimit + 6){
+      lola.vy = Math.max(lola.vy + wingImpulse, -8.2);
+      lola.jumping = true;
+      beep(780,.04);
+    }else{
+      lola.y = wingTopLimit;
+      lola.vy = Math.max(lola.vy, 1.2);
+      beep(520,.035);
+    }
+    return;
+  }
+
   if(!lola.jumping){
     lola.vy = -18.5;
     lola.jumping = true;
@@ -321,6 +359,18 @@ function spawnThings(){
     prizes.push({x:W+50,y:groundY-185,w:46,h:46,type:"galaxy",taken:false,bob:0});
   }
 
+  // Ala de gallina: aparece 1 o 2 veces por nivel y permite flotar un poco más.
+  const wingLimit = level <= 3 ? 1 : 2;
+  const wingPointA = prevTarget + (cfg.targetScore - prevTarget) * 0.28;
+  const wingPointB = prevTarget + (cfg.targetScore - prevTarget) * 0.72;
+  if(wingSpawnedThisLevel < wingLimit){
+    const nextWingScore = wingSpawnedThisLevel === 0 ? wingPointA : wingPointB;
+    if(score >= nextWingScore){
+      wingSpawnedThisLevel++;
+      prizes.push({x:W+50,y:groundY-155,w:44,h:34,type:"wing",taken:false,bob:0});
+    }
+  }
+
   // Enemigos dificultad baja escalable.
   const enemyRate = Math.max(135, 430 - level*32);
   if(frame % enemyRate === 0){
@@ -352,7 +402,7 @@ function levelUp(){
   if(level < levelData.length){
     const next = level + 1;
     startLevel(next);
-    message = motivationalPhrases[(next-2)%motivationalPhrases.length];
+    message = namedText(motivationalPhrases[(next-2)%motivationalPhrases.length]);
     messageTimer = 180;
   }else{
     state = "win";
@@ -381,7 +431,19 @@ function update(){
 
   lola.walk += speed*2.2;
   lola.y += lola.vy;
-  lola.vy += gravity;
+
+  if(wingActive){
+    // Flotación controlada: cae lento, sube solo con Enter/Saltar y no cruza el límite superior.
+    lola.vy += gravity * 0.42;
+    if(lola.vy > 2.8) lola.vy = 2.8;
+    if(lola.y < wingTopLimit){
+      lola.y = wingTopLimit;
+      lola.vy = Math.max(lola.vy, 1.2);
+    }
+  }else{
+    lola.vy += gravity;
+  }
+
   if(lola.y > groundY-lola.h){
     lola.y = groundY-lola.h;
     lola.vy = 0;
@@ -435,6 +497,7 @@ function update(){
       else if(p.type==="berry") gained=0;
       else if(p.type==="gold") gained=0;
       else if(p.type==="galaxy") gained=0;
+      else if(p.type==="wing") gained=0;
 
       if(p.type==="berry"){
         if(lives < 5){
@@ -447,7 +510,7 @@ function update(){
           localStorage.setItem("lola_pro_coins", coins);
           floatingTexts.push({x:p.x,y:p.y,text:"+2 pts",life:70});
         }
-        message = lives >= 5 ? "🍓 Vidas llenas: +2 puntos" : "🍓 ¡Vida extra!";
+        message = lives >= 5 ? "🍓 "+safeName()+": vidas llenas, +2 puntos" : "🍓 ¡Vida extra para "+safeName()+"!";
         messageTimer = 80;
       }else if(p.type==="gold"){
         goldenActive = true;
@@ -455,20 +518,34 @@ function update(){
         goldenTimer = 180;
         galaxyTimer = 0;
         floatingTexts.push({x:p.x,y:p.y,text:"¡Súper poder!",life:80});
-        message = "✨ ¡Gallina dorada invencible!";
+        message = "✨ ¡"+safeName()+", gallina dorada invencible!";
         messageTimer = 100;
         stopAllMusic();
         playHeroMusic();
       }else if(p.type==="galaxy"){
         galaxyActive = true;
         goldenActive = false;
+        wingActive = false;
         galaxyTimer = 300; // 5 segundos aprox
         goldenTimer = 0;
+        wingTimer = 0;
         floatingTexts.push({x:p.x,y:p.y,text:"¡Poder galaxia!",life:90});
-        message = "🌌 ¡Lola Galaxia por 5 segundos!";
+        message = "🌌 ¡"+safeName()+", Lola Galaxia por 5 segundos!";
         messageTimer = 120;
         stopAllMusic();
         playHeroMusic();
+      }else if(p.type==="wing"){
+        wingActive = true;
+        goldenActive = false;
+        galaxyActive = false;
+        wingTimer = 300; // 5 segundos aprox
+        goldenTimer = 0;
+        galaxyTimer = 0;
+        floatingTexts.push({x:p.x,y:p.y,text:"¡Ala mágica 5s!",life:90});
+        message = "🪽 ¡"+safeName()+", ala mágica por 5 segundos!";
+        messageTimer = 120;
+        stopAllMusic();
+        playWingMusic();
       }else{
         score += gained;
         coins += gained;
@@ -500,13 +577,22 @@ function update(){
     }
   }
 
+  if(wingActive){
+    wingTimer--;
+    if(wingTimer<=0){
+      wingActive=false;
+      stopAllMusic();
+      playBgMusic();
+    }
+  }
+
   if(lola.inv>0) lola.inv--;
 
   const cfg = levelData[level-1];
   if(score >= cfg.targetScore) levelUp();
 }
 
-function drawPixelChicken(x,y,scale=4,walk=0){
+function drawPixelChicken(x,y,scale=4,walk=0,flap=false){
   ctx.save();
   ctx.translate(Math.round(x), Math.round(y));
   ctx.scale(scale,scale);
@@ -525,8 +611,19 @@ function drawPixelChicken(x,y,scale=4,walk=0){
   line(3,6,7,1,"#fff"); line(3,7,8,2,"#fff"); line(2,9,10,5,"#fff");
   line(4,14,7,1,"#fff"); line(12,9,2,3,"#fff");
 
-  // ala
-  line(3,9,1,4,"#bbb"); line(4,12,4,1,"#ddd"); line(4,13,5,1,"#bbb");
+  // ala normal o aleteo cuando tiene premio de ala
+  if(flap){
+    const flapStep = Math.floor(frame/5)%2;
+    if(flapStep===0){
+      line(0,7,4,1,"#222"); line(0,8,5,1,"#ddd"); line(1,9,5,1,"#fff"); line(2,10,4,1,"#bbb");
+      line(8,8,5,1,"#222"); line(8,9,6,1,"#ddd"); line(8,10,5,1,"#fff"); line(8,11,4,1,"#bbb");
+    }else{
+      line(0,11,5,1,"#222"); line(0,12,6,1,"#ddd"); line(1,13,5,1,"#fff"); line(2,14,4,1,"#bbb");
+      line(8,12,5,1,"#222"); line(8,13,6,1,"#ddd"); line(8,14,5,1,"#fff"); line(8,15,4,1,"#bbb");
+    }
+  }else{
+    line(3,9,1,4,"#bbb"); line(4,12,4,1,"#ddd"); line(4,13,5,1,"#bbb");
+  }
 
   // cabeza
   line(9,2,4,1,"#222"); line(8,3,6,1,"#222"); line(8,4,6,5,"#222");
@@ -789,6 +886,22 @@ function drawWorld(){
       ctx.fillStyle="#ff3b5c";
       ctx.beginPath(); ctx.arc(p.x+17,y+18,15,0,Math.PI*2); ctx.fill();
       ctx.fillStyle="#2f9e44"; ctx.fillRect(p.x+12,y+3,10,8);
+    }else if(p.type==="wing"){
+      ctx.save();
+      ctx.translate(p.x+22,y+18);
+      ctx.rotate(Math.sin(frame/8)*0.25);
+      ctx.fillStyle="#ffffff";
+      ctx.beginPath();
+      ctx.ellipse(0,0,22,12,-0.35,0,Math.PI*2);
+      ctx.fill();
+      ctx.strokeStyle="#222";
+      ctx.lineWidth=2;
+      ctx.stroke();
+      ctx.fillStyle="#dbeafe";
+      ctx.fillRect(-13,2,8,4);
+      ctx.fillRect(-3,5,9,4);
+      ctx.fillRect(8,4,8,4);
+      ctx.restore();
     }else{
       ctx.fillStyle="#ffcf33";
       ctx.fillRect(p.x+10,y+2,14,28);
@@ -818,9 +931,10 @@ function drawWorld(){
     ctx.fill();
 
     if(!lola.inv || lola.inv%12<6){
-      if(galaxyActive) drawGalaxyAura(lola.x,lola.y,lola.walk);
-      else if(goldenActive) drawGoldenAura(lola.x,lola.y,lola.walk);
-      else drawPixelChicken(lola.x,lola.y,4,lola.walk);
+      const floatY = wingActive ? lola.y + Math.sin(frame/6)*5 : lola.y;
+      if(galaxyActive) drawGalaxyAura(lola.x,floatY,lola.walk);
+      else if(goldenActive) drawGoldenAura(lola.x,floatY,lola.walk);
+      else drawPixelChicken(lola.x,floatY,4,lola.walk,wingActive);
     }
   }
 
@@ -850,10 +964,10 @@ function drawHUD(){
   ctx.fillText("❤ "+lives,380,48);
 
   ctx.font="bold 13px monospace";
-  ctx.fillText("⭐=5 ❤️=3 🌽=1 🍓=vida 🥚=oro 🌌=5s",24,76);
+  ctx.fillText("⭐=5 ❤️=3 🌽=1 🍓=vida 🥚=oro 🌌=5s 🪽=flotar",24,76);
 
   ctx.font="12px monospace";
-  ctx.fillText("Evita enemigos. Dorada los vence +2.",24,100);
+  ctx.fillText("Evita enemigos. 🪽 Enter/Saltar = flotar.",24,100);
   ctx.fillText("Monedas acumuladas: "+coins+" 🪙",24,124);
 
   ctx.fillStyle="#ddd";
@@ -873,6 +987,16 @@ function drawHUD(){
     ctx.fillStyle="#4c1d95";
     ctx.font="bold 13px monospace";
     ctx.fillText("🌌 Lola Galaxia: "+Math.ceil(galaxyTimer/60)+"s",24,144);
+  }
+  if(wingActive){
+    ctx.fillStyle="#6b4fbb";
+    ctx.font="bold 13px monospace";
+    ctx.fillText("🪽 Ala mágica: "+Math.ceil(wingTimer/60)+"s",24,144);
+  }
+  if(wingActive){
+    ctx.fillStyle="#2563eb";
+    ctx.font="bold 13px monospace";
+    ctx.fillText("🪽 Ala mágica: "+Math.ceil(wingTimer/60)+"s",24,144);
   }
 
   ctx.fillStyle="rgba(255,255,255,.65)";
@@ -936,7 +1060,7 @@ function drawMenu(){
   ctx.font="bold 17px monospace";
   ctx.fillText(playerName ? playerName : "Toca aquí para escribir",W/2,229);
   ctx.font="bold 12px monospace";
-  ctx.fillText("⭐=5 ❤️=3 🌽=1 🍓=vida 🥚=oro 🌌=5s",W/2,258);
+  ctx.fillText("⭐=5 ❤️=3 🌽=1 🍓=vida 🪽=flotar",W/2,258);
 
   ctx.fillStyle="#fff7b2";
   ctx.fillRect(W/2-120,620,240,68);
@@ -993,7 +1117,7 @@ function draw(){
 
   if(state==="play") drawHUD();
   if(state==="gameover") drawEnd("GAME OVER","Puntos: "+score);
-  if(state==="win") drawEnd("¡GANASTE!","¡" + safeName() + " y Lola lo lograron!");
+  if(state==="win") drawEnd("¡GANASTE!","¡"+safeName()+" lo logró con Lola!");
 }
 
 function loop(){
@@ -1047,7 +1171,7 @@ window.addEventListener("keydown",e=>{
     }
   }
 
-  if(e.code==="Space" || e.key==="ArrowUp"){
+  if(e.code==="Space" || e.key==="ArrowUp" || e.key==="Enter"){
     e.preventDefault();
     jump();
   }
@@ -1061,7 +1185,8 @@ document.getElementById("muteBtn").addEventListener("click",()=>{
   document.getElementById("muteBtn").textContent = musicMuted ? "🔇 Silencio" : "🔊 Música";
   if(musicMuted) stopAllMusic();
   else if(state==="play"){
-    if(goldenActive || galaxyActive) playHeroMusic();
+    if(wingActive) playWingMusic();
+    else if(goldenActive || galaxyActive) playHeroMusic();
     else playBgMusic();
   }
 });
