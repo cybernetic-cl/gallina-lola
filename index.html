@@ -30,49 +30,58 @@
     border:none;
     box-shadow:0 6px 16px rgba(0,0,0,.25);
     font-weight:900;
+    align-items:center;
+    justify-content:center;
   }
-  #jumpBtn{
-    right:18px;
+  #jumpBtn,
+  #fireBtn{
     bottom:calc(18px + env(safe-area-inset-bottom));
     width:98px;
     height:98px;
     border-radius:50%;
-    background:#ffd6ea;
-    border:4px solid #d45b94;
     font-size:17px;
   }
+  #jumpBtn{
+    right:18px;
+    display:flex;
+    background:#ffd6ea;
+    border:4px solid #d45b94;
+    color:#351426;
+  }
   #fireBtn{
-    right:128px;
-    bottom:calc(30px + env(safe-area-inset-bottom));
-    width:118px;
-    height:58px;
-    border-radius:22px;
+    left:18px;
+    display:none;
     background:linear-gradient(180deg,#ffef7a,#ff5a1f);
     border:4px solid #7a1200;
     color:#2b0600;
-    font-size:16px;
     text-shadow:0 1px 0 rgba(255,255,255,.45);
   }
+  #jumpBtn:active,
   #fireBtn:active{
     transform:scale(.94);
     box-shadow:0 3px 8px rgba(0,0,0,.3);
   }
   #muteBtn{
-    left:16px;
-    bottom:calc(22px + env(safe-area-inset-bottom));
-    width:112px;
-    height:46px;
-    border-radius:15px;
-    background:#fff;
+    right:12px;
+    top:calc(10px + env(safe-area-inset-top));
+    width:38px;
+    height:38px;
+    border-radius:50%;
+    background:rgba(255,255,255,.94);
     border:3px solid #333;
-    font-size:15px;
+    font-size:18px;
+    display:flex;
+    padding:0;
+  }
+  #muteBtn:active{
+    transform:scale(.94);
   }
 </style>
 </head>
 <body>
 <canvas id="game" width="480" height="800"></canvas>
-<button id="muteBtn" class="gameBtn">🔊 Música</button>
-<button id="fireBtn" class="gameBtn">🔥 FUEGO</button>
+<button id="fireBtn" class="gameBtn">🔥<br>FUEGO</button>
+<button id="muteBtn" class="gameBtn" aria-label="Música">🔊</button>
 <button id="jumpBtn" class="gameBtn">SALTAR</button>
 
 <script>
@@ -107,6 +116,10 @@ let dragonActive = false;
 let dragonTimer = 0;
 let cornStreak = 0;
 let fireBalls = [];
+let explosions = [];
+let fireCooldown = 0;
+const fireCooldownMax = 55;
+let screenShake = 0;
 let galaxyEggSpawned = false;
 let wingActive = false;
 let wingTimer = 0;
@@ -277,6 +290,9 @@ function startLevel(n){
   dragonTimer = 0;
   cornStreak = 0;
   fireBalls = [];
+  explosions = [];
+  fireCooldown = 0;
+  screenShake = 0;
   galaxyEggSpawned = false;
   wingActive = false;
   wingTimer = 0;
@@ -345,18 +361,21 @@ function jump(){
 
 
 function shootFire(){
-  // Botón manual: dispara un solo fuego lineal hacia adelante.
-  // Para el modo prueba del dragón, se permite disparar durante la partida.
-  if(state !== "play") return;
-  if(fireBalls.length > 0) return;
+  // Botón manual PRO: cooldown anti-spam + vibración visual.
+  if(state !== "play" || !dragonActive) return;
+  if(fireCooldown > 0) return;
+
+  fireCooldown = fireCooldownMax;
+  screenShake = 8;
 
   fireBalls.push({
-    x:lola.x + 118,   // separado de la boca
+    x:lola.x + 118,
     y:lola.y + 30,
     w:64,
     h:18,
-    vx:11.5,         // movimiento lineal hacia adelante
-    life:90
+    vx:12.5,
+    life:95,
+    radius:76
   });
 
   floatingTexts.push({x:lola.x+60,y:lola.y-8,text:"🔥 Fuego",life:42});
@@ -476,7 +495,17 @@ function createConfetti(){
 
 function update(){
   frame++;
+  const fireBtn = document.getElementById("fireBtn");
+  if(fireBtn){
+    fireBtn.style.display = (state === "play" && dragonActive) ? "flex" : "none";
+    fireBtn.style.opacity = fireCooldown > 0 ? ".55" : "1";
+    fireBtn.innerHTML = fireCooldown > 0 ? "🔥<br>" + Math.ceil(fireCooldown/60) : "🔥<br>FUEGO";
+  }
   if(messageTimer>0) messageTimer--;
+  if(fireCooldown>0) fireCooldown--;
+  if(screenShake>0) screenShake--;
+  explosions.forEach(ex=>{ex.life--; ex.r += ex.grow;});
+  explosions = explosions.filter(ex=>ex.life>0);
 
   // confetti update
   confetti.forEach(c=>{c.x+=c.vx;c.y+=c.vy;c.life--;});
@@ -529,27 +558,62 @@ function update(){
   });
 
   for(const f of fireBalls){
+    if(f.life <= 0) continue;
+    let hit = false;
+    let hx = f.x + f.w;
+    let hy = f.y + f.h/2;
+
     for(const e of enemies){
       if(e.x > -100 && rects(f,e)){
-        score += 3;
-        coins += 1;
-        localStorage.setItem("lola_pro_coins", coins);
-        floatingTexts.push({x:e.x,y:e.y,text:"+3 fuego",life:60});
-        e.x = -140;
-        f.life = 0;
-        beep(520,.04);
+        hit = true;
+        hx = e.x + e.w/2;
+        hy = e.y + e.h/2;
+        break;
       }
     }
 
-    for(const o of obstacles){
-      if(o.x > -100 && rects(f,o)){
-        score += 2;
-        coins += 1;
+    if(!hit){
+      for(const o of obstacles){
+        if(o.x > -100 && rects(f,o)){
+          hit = true;
+          hx = o.x + o.w/2;
+          hy = o.y + o.h/2;
+          break;
+        }
+      }
+    }
+
+    if(hit){
+      f.life = 0;
+      screenShake = 12;
+      explosions.push({x:hx,y:hy,r:12,grow:5,life:18,maxLife:18});
+      beep(240,.055);
+
+      // AOE: destruye todo lo cercano al impacto.
+      const radius = f.radius || 76;
+      let destroyed = 0;
+      for(const e of enemies){
+        const cx = e.x + e.w/2;
+        const cy = e.y + e.h/2;
+        if(e.x > -100 && Math.hypot(cx-hx, cy-hy) <= radius){
+          e.x = -140;
+          destroyed++;
+          score += 3;
+        }
+      }
+      for(const o of obstacles){
+        const cx = o.x + o.w/2;
+        const cy = o.y + o.h/2;
+        if(o.x > -100 && Math.hypot(cx-hx, cy-hy) <= radius){
+          o.x = -140;
+          destroyed++;
+          score += 2;
+        }
+      }
+      if(destroyed > 0){
+        coins += destroyed;
         localStorage.setItem("lola_pro_coins", coins);
-        floatingTexts.push({x:o.x,y:o.y,text:"+2 fuego",life:60});
-        o.x = -140;
-        f.life = 0;
-        beep(420,.04);
+        floatingTexts.push({x:hx-25,y:hy-20,text:"💥 AOE x"+destroyed,life:70});
       }
     }
   }
@@ -1331,6 +1395,25 @@ function drawWorld(){
     ctx.restore();
   });
 
+  // explosión AOE al impactar
+  explosions.forEach(ex=>{
+    ctx.save();
+    const alpha = Math.max(0, ex.life / ex.maxLife);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = "#ff3b00";
+    ctx.beginPath(); ctx.arc(ex.x, ex.y, ex.r, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = alpha * .85;
+    ctx.fillStyle = "#ff9900";
+    ctx.beginPath(); ctx.arc(ex.x, ex.y, ex.r*.68, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = "#fff36d";
+    ctx.beginPath(); ctx.arc(ex.x, ex.y, ex.r*.32, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = "rgba(120,0,0,.85)";
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(ex.x, ex.y, ex.r + 8, 0, Math.PI*2); ctx.stroke();
+    ctx.restore();
+  });
+
   // textos flotantes
   floatingTexts.forEach(t=>{
     ctx.save();
@@ -1353,8 +1436,15 @@ function drawWorld(){
 
     if(!lola.inv || lola.inv%12<6){
       const floatY = wingActive ? lola.y + Math.sin(frame/6)*5 : lola.y;
-      // MODO TEST TEMPORAL: Lola siempre se muestra como dragón para mejorar su diseño.
-      drawDragonLola(lola.x-8,floatY+3,3);
+      if(dragonActive){
+        drawDragonLola(lola.x-8,floatY+3,3);
+      }else if(galaxyActive){
+        drawGalaxyAura(lola.x,floatY,lola.walk);
+      }else if(goldenActive){
+        drawGoldenAura(lola.x,floatY,lola.walk);
+      }else{
+        drawPixelChicken(lola.x,floatY,4,lola.walk,wingActive);
+      }
     }
   }
 
@@ -1370,78 +1460,106 @@ function drawHUD(){
   const prevTarget = level===1 ? 0 : levelData[level-2].targetScore;
   const progress = Math.min(1,(score-prevTarget)/(cfg.targetScore-prevTarget));
 
+  const roundRect = (x,y,w,h,r,fill,stroke)=>{
+    ctx.beginPath();
+    ctx.moveTo(x+r,y);
+    ctx.lineTo(x+w-r,y);
+    ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+    ctx.lineTo(x+w,y+h-r);
+    ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+    ctx.lineTo(x+r,y+h);
+    ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+    ctx.lineTo(x,y+r);
+    ctx.quadraticCurveTo(x,y,x+r,y);
+    ctx.closePath();
+    if(fill) ctx.fill();
+    if(stroke) ctx.stroke();
+  };
+
+  // Panel principal ordenado
+  ctx.save();
   ctx.fillStyle="rgba(255,255,255,.94)";
-  ctx.fillRect(10,18,W-20,132);
-  ctx.strokeStyle="#2b5f2b";
+  ctx.strokeStyle="rgba(31,41,55,.85)";
   ctx.lineWidth=3;
-  ctx.strokeRect(10,18,W-20,132);
+  roundRect(10,18,W-20,128,18,true,true);
 
-  ctx.fillStyle="#222";
-  ctx.font="bold 17px monospace";
-  ctx.fillText("🐔 "+safeName(),24,48);
-  ctx.fillText("Nivel "+level,150,48);
-  ctx.fillText("Pts: "+score,260,48);
+  // Título / jugador
+  ctx.fillStyle="#1f2937";
+  ctx.font="bold 15px monospace";
+  ctx.fillText("🐔 "+safeName(),24,44);
 
-  // Contador de vidas grande y visible en tiempo real
-  ctx.fillStyle="rgba(255,245,245,.98)";
-  ctx.fillRect(350,30,100,34);
+  // Badges superiores
+  const badge=(x,y,w,h,text,bg,fg="#111827")=>{
+    ctx.fillStyle=bg;
+    ctx.strokeStyle="rgba(0,0,0,.22)";
+    ctx.lineWidth=2;
+    roundRect(x,y,w,h,10,true,true);
+    ctx.fillStyle=fg;
+    ctx.font="bold 13px monospace";
+    ctx.textAlign="center";
+    ctx.fillText(text,x+w/2,y+18);
+    ctx.textAlign="left";
+  };
+
+  badge(24,58,86,26,"Nivel "+level,"#dbeafe");
+  badge(118,58,98,26,"Pts "+score,"#dcfce7");
+  badge(224,58,90,26,"🪙 "+coins,"#fef3c7");
+
+  // Vidas en tiempo real, muy visible
+  ctx.fillStyle="#fee2e2";
   ctx.strokeStyle="#b91c1c";
   ctx.lineWidth=3;
-  ctx.strokeRect(350,30,100,34);
+  roundRect(326,50,120,40,14,true,true);
   ctx.fillStyle="#b91c1c";
-  ctx.font="bold 19px monospace";
-  ctx.fillText("❤ "+lives+"/5",362,53);
+  ctx.font="bold 20px monospace";
+  ctx.fillText("❤ "+lives+"/5",342,76);
+  ctx.font="bold 10px monospace";
+  ctx.fillStyle="#7f1d1d";
+  ctx.fillText("perdidas: "+livesLost,347,88);
 
-  // Descuento visual de vidas perdidas
-  ctx.fillStyle="#222";
-  ctx.font="bold 11px monospace";
-  ctx.fillText("Perdidas: "+livesLost,356,78);
-
-  ctx.font="bold 13px monospace";
-  ctx.fillText("⭐=5 ❤️=3 🌽=1 🍓=vida 🥚=oro 🌌=5s 🪽=flotar 🐉=10🌽",24,84);
-
-  ctx.font="12px monospace";
-  ctx.fillText("Evita enemigos. 🪽 Enter/Saltar = flotar.",24,104);
-  ctx.fillText("Monedas acumuladas: "+coins+" 🪙",24,126);
-
-  ctx.fillStyle="#ddd";
-  ctx.fillRect(210,112,230,16);
-  ctx.fillStyle="#55c85a";
-  ctx.fillRect(210,112,230*progress,16);
-  ctx.strokeStyle="#222";
+  // Barra de avance del nivel
+  ctx.fillStyle="#e5e7eb";
+  roundRect(24,96,300,18,9,true,false);
+  ctx.fillStyle="#22c55e";
+  roundRect(24,96,300*progress,18,9,true,false);
+  ctx.strokeStyle="#111827";
   ctx.lineWidth=2;
-  ctx.strokeRect(210,112,230,16);
+  roundRect(24,96,300,18,9,false,true);
+  ctx.fillStyle="#111827";
+  ctx.font="bold 11px monospace";
+  ctx.fillText("Meta: "+cfg.targetScore,334,110);
 
-  if(goldenActive){
-    ctx.fillStyle="#b8860b";
-    ctx.font="bold 13px monospace";
-    ctx.fillText("✨ Súper Lola: "+Math.ceil(goldenTimer/60)+"s",24,144);
-  }
-  if(galaxyActive){
-    ctx.fillStyle="#4c1d95";
-    ctx.font="bold 13px monospace";
-    ctx.fillText("🌌 Lola Galaxia: "+Math.ceil(galaxyTimer/60)+"s",24,144);
-  }
-  if(wingActive){
-    ctx.fillStyle="#6b4fbb";
-    ctx.font="bold 13px monospace";
-    ctx.fillText("🪽 Ala mágica: "+Math.ceil(wingTimer/60)+"s",24,144);
-  }
-  if(wingActive){
-    ctx.fillStyle="#2563eb";
-    ctx.font="bold 13px monospace";
-    ctx.fillText("🪽 Ala mágica: "+Math.ceil(wingTimer/60)+"s",24,144);
-  }
+  // Estado del poder / combo en una línea clara
+  let statusText = "🌽 Racha x"+cornStreak+" 🔥  ·  10 elotes = Dragón";
+  let statusBg = "#fff7ed";
+  let statusFg = "#9a3412";
 
   if(dragonActive){
-    ctx.fillStyle="#c2410c";
-    ctx.font="bold 13px monospace";
-    ctx.fillText("🐉 Modo Dragón: "+Math.ceil(dragonTimer/60)+"s · botón 🔥 FUEGO",24,144);
-  }else if(!goldenActive && !galaxyActive && !wingActive){
-    ctx.fillStyle="#7c2d12";
-    ctx.font="bold 13px monospace";
-    ctx.fillText("Racha x"+cornStreak+" 🔥 · 10 elotes = Modo Dragón 🐉",24,144);
+    statusText = "🐉 Dragón "+Math.ceil(dragonTimer/60)+"s  ·  "+(fireCooldown>0 ? "🔥 recarga "+Math.ceil(fireCooldown/60)+"s" : "🔥 fuego listo");
+    statusBg = "#ffedd5";
+    statusFg = "#c2410c";
+  }else if(galaxyActive){
+    statusText = "🌌 Lola Galaxia "+Math.ceil(galaxyTimer/60)+"s";
+    statusBg = "#ede9fe";
+    statusFg = "#4c1d95";
+  }else if(goldenActive){
+    statusText = "✨ Súper Lola "+Math.ceil(goldenTimer/60)+"s";
+    statusBg = "#fef9c3";
+    statusFg = "#854d0e";
+  }else if(wingActive){
+    statusText = "🪽 Ala mágica "+Math.ceil(wingTimer/60)+"s  ·  Saltar/Enter para flotar";
+    statusBg = "#dbeafe";
+    statusFg = "#1d4ed8";
   }
+
+  ctx.fillStyle=statusBg;
+  ctx.strokeStyle="rgba(0,0,0,.18)";
+  ctx.lineWidth=2;
+  roundRect(24,120,422,20,10,true,true);
+  ctx.fillStyle=statusFg;
+  ctx.font="bold 12px monospace";
+  ctx.fillText(statusText,34,135);
+  ctx.restore();
 
   ctx.fillStyle="rgba(255,255,255,.65)";
   ctx.font="bold 10px monospace";
@@ -1451,11 +1569,11 @@ function drawHUD(){
 
   if(messageTimer>0){
     ctx.fillStyle="rgba(0,0,0,.62)";
-    ctx.fillRect(24,170,W-48,62);
+    ctx.fillRect(24,160,W-48,62);
     ctx.fillStyle="#fff";
     ctx.textAlign="center";
     ctx.font="bold 18px monospace";
-    ctx.fillText(message,W/2,208);
+    ctx.fillText(message,W/2,198);
     ctx.textAlign="left";
   }
 }
@@ -1557,11 +1675,19 @@ function draw(){
   ctx.clearRect(0,0,W,H);
 
   if(state==="menu"){drawMenu(); return;}
-  drawWorld();
 
+  ctx.save();
+  if(screenShake > 0){
+    const amp = Math.min(6, screenShake);
+    ctx.translate(rand(-amp, amp), rand(-amp, amp));
+  }
+
+  drawWorld();
   if(state==="play") drawHUD();
   if(state==="gameover") drawEnd("GAME OVER","Puntos: "+score);
   if(state==="win") drawEnd("¡GANASTE!","¡"+safeName()+" lo logró con Lola!");
+
+  ctx.restore();
 }
 
 function loop(){
@@ -1635,7 +1761,7 @@ document.getElementById("jumpBtn").addEventListener("touchstart",e=>{e.preventDe
 
 document.getElementById("muteBtn").addEventListener("click",()=>{
   musicMuted = !musicMuted;
-  document.getElementById("muteBtn").textContent = musicMuted ? "🔇 Silencio" : "🔊 Música";
+  document.getElementById("muteBtn").textContent = musicMuted ? "🔇" : "🔊";
   if(musicMuted) stopAllMusic();
   else if(state==="play"){
     if(wingActive) playWingMusic();
